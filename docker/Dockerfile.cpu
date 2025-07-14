@@ -47,9 +47,10 @@ ENV PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
 ENV UV_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
 ENV UV_INDEX_STRATEGY="unsafe-best-match"
 ENV UV_LINK_MODE="copy"
+
+COPY requirements/common.txt requirements/common.txt
+COPY requirements/cpu.txt requirements/cpu.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,src=requirements/common.txt,target=requirements/common.txt \
-    --mount=type=bind,src=requirements/cpu.txt,target=requirements/cpu.txt \
     uv pip install --upgrade pip && \
     uv pip install -r requirements/cpu.txt
 
@@ -73,8 +74,8 @@ ENV VLLM_CPU_AVX512VNNI=${VLLM_CPU_AVX512VNNI}
 
 WORKDIR /workspace/vllm
 
+COPY requirements/cpu-build.txt requirements/build.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,src=requirements/cpu-build.txt,target=requirements/build.txt \
     uv pip install -r requirements/build.txt
 
 COPY . .
@@ -84,7 +85,6 @@ RUN --mount=type=bind,source=.git,target=.git \
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/ccache \
     --mount=type=cache,target=/workspace/vllm/.deps,sharing=locked \
-    --mount=type=bind,source=.git,target=.git \
     VLLM_TARGET_DEVICE=cpu python3 setup.py bdist_wheel 
 
 ######################### TEST DEPS #########################
@@ -159,5 +159,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/ccache \
     --mount=type=bind,from=vllm-build,src=/workspace/vllm/dist,target=dist \
     uv pip install dist/*.whl
+
+# predownload the model
+RUN huggingface-cli download --local-dir /root/.cache/Llama-3.2-1B-Instruct meta-llama/Llama-3.2-1B-Instruct && rm -rf /root/.cache/huggingface /root/.cache/Llama-3.2-1B-Instruct/original
 
 ENTRYPOINT ["python3", "-m", "vllm.entrypoints.openai.api_server"]
